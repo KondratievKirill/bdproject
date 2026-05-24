@@ -21,8 +21,8 @@ public class FinanceApp extends Application {
     private Connection connection;
     private int currentUserId;
     private Stage primaryStage;
+    private TabPane mainTabPane; // Ссылка на TabPane для отслеживания переключений
     
-    // UI элементы для вкладок
     private ComboBox<String> accountComboBox;
     private ComboBox<String> categoryComboBox;
     private TextField amountField;
@@ -32,13 +32,10 @@ public class FinanceApp extends Application {
     private TextArea statsArea;
     private TextArea goalsArea;
     private ListView<String> accountsListView;
-    
-    // UI элементы для целей
     private ComboBox<String> accountForGoalBox;
     private ComboBox<String> goalSelectionBox;
     private TextField amountToGoalField;
 
-    // Конфигурация БД
     private static Properties props;
     private static String activeDbType;
 
@@ -61,7 +58,6 @@ public class FinanceApp extends Application {
         showDatabaseSelection();
     }
 
-    // --- ЭКРАН 1: Выбор базы данных ---
     private void showDatabaseSelection() {
         VBox root = new VBox(20);
         root.setPadding(new Insets(40));
@@ -76,8 +72,6 @@ public class FinanceApp extends Application {
 
         Button connectBtn = new Button("Подключиться к БД");
         connectBtn.setStyle("-fx-font-size: 16; -fx-padding: 10 20;");
-        
-        // ИСПРАВЛЕНИЕ: Теперь кнопка вызывает подключение, а не сразу меню
         connectBtn.setOnAction(e -> connectToDb());
 
         root.getChildren().addAll(title, dbInfo, connectBtn);
@@ -87,7 +81,6 @@ public class FinanceApp extends Application {
         primaryStage.show();
     }
 
-    // --- МЕТОД ПОДКЛЮЧЕНИЯ К БД ---
     private void connectToDb() {
         try {
             String url, user, pass, driver;
@@ -108,9 +101,7 @@ public class FinanceApp extends Application {
             connection = DriverManager.getConnection(url, user, pass);
             
             showAlert("Успех", "Подключено к " + activeDbType, Alert.AlertType.INFORMATION);
-            
-            // ИСПРАВЛЕНИЕ: После успешного подключения показываем меню входа/регистрации
-            showLoginOrRegister(); 
+            showLoginOrRegister();
             
         } catch (Exception e) {
             showAlert("Ошибка подключения", e.getMessage(), Alert.AlertType.ERROR);
@@ -118,7 +109,6 @@ public class FinanceApp extends Application {
         }
     }
 
-    // --- ЭКРАН 2: Меню Вход / Регистрация ---
     private void showLoginOrRegister() {
         VBox root = new VBox(15);
         root.setPadding(new Insets(30));
@@ -141,7 +131,6 @@ public class FinanceApp extends Application {
         primaryStage.setScene(new Scene(root, 300, 250));
     }
 
-    // --- ЭКРАН ВХОДА ---
     private void showLogin() {
         VBox root = new VBox(15);
         root.setPadding(new Insets(30));
@@ -174,7 +163,6 @@ public class FinanceApp extends Application {
         primaryStage.setScene(new Scene(root, 300, 320));
     }
 
-    // --- ЭКРАН РЕГИСТРАЦИИ ---
     private void showRegister() {
         VBox root = new VBox(15);
         root.setPadding(new Insets(30));
@@ -208,7 +196,6 @@ public class FinanceApp extends Application {
         primaryStage.setScene(new Scene(root, 350, 350));
     }
 
-    // --- ЛОГИКА РЕГИСТРАЦИИ ---
     private void register(String username, String password, String confirmPassword) {
         if (username.trim().isEmpty() || password.trim().isEmpty()) {
             showAlert("Ошибка", "Логин и пароль не могут быть пустыми!", Alert.AlertType.ERROR);
@@ -226,7 +213,6 @@ public class FinanceApp extends Application {
         }
 
         try {
-            // Проверка на уникальность логина
             String checkSql = "SELECT COUNT(*) FROM users WHERE username = ?";
             PreparedStatement psCheck = connection.prepareStatement(checkSql);
             psCheck.setString(1, username.trim());
@@ -237,7 +223,6 @@ public class FinanceApp extends Application {
                 return;
             }
 
-            // Создание нового пользователя
             String insertSql = "INSERT INTO users (username, password_hash) VALUES (?, ?)";
             PreparedStatement psInsert = connection.prepareStatement(insertSql);
             psInsert.setString(1, username.trim());
@@ -253,7 +238,6 @@ public class FinanceApp extends Application {
         }
     }
 
-    // --- ЛОГИКА ВХОДА ---
     private void login(String username, String password) {
         try {
             String sql = "SELECT id FROM users WHERE username = ? AND password_hash = ?";
@@ -273,17 +257,36 @@ public class FinanceApp extends Application {
         }
     }
 
-    // --- ГЛАВНОЕ ОКНО ---
     private void showMainWindow() {
-        TabPane tabPane = new TabPane();
-        tabPane.getTabs().addAll(
-            createTab("Счета", createAccountsTab()),
-            createTab("Транзакции", createTransactionsTab()),
-            createTab("Цели", createGoalsTab()),
-            createTab("Аналитика", createStatsTab())
-        );
-        primaryStage.setScene(new Scene(tabPane, 850, 650));
+        mainTabPane = new TabPane();
+        
+        Tab accountsTab = createTab("Счета", createAccountsTab());
+        Tab transactionsTab = createTab("Транзакции", createTransactionsTab());
+        Tab goalsTab = createTab("Цели", createGoalsTab());
+        Tab statsTab = createTab("Аналитика", createStatsTab());
+        
+        mainTabPane.getTabs().addAll(accountsTab, transactionsTab, goalsTab, statsTab);
+        
+        // 🔥 АВТОМАТИЧЕСКАЯ ЗАГРУЗКА ДАННЫХ ПРИ ПЕРЕКЛЮЧЕНИИ ВКЛАДОК
+        mainTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> {
+            if (newTab != null) {
+                if ("Счета".equals(newTab.getText())) {
+                    refreshAccounts();
+                } else if ("Транзакции".equals(newTab.getText())) {
+                    loadDropdowns();
+                } else if ("Цели".equals(newTab.getText())) {
+                    refreshGoals();
+                    loadGoalDropdowns();
+                } else if ("Аналитика".equals(newTab.getText())) {
+                    loadStats();
+                }
+            }
+        });
+        
+        primaryStage.setScene(new Scene(mainTabPane, 850, 650));
         primaryStage.setTitle("Finance Manager (" + activeDbType + ") - ID: " + currentUserId);
+        
+        refreshAccounts();
     }
 
     private Tab createTab(String name, Node content) {
@@ -293,7 +296,6 @@ public class FinanceApp extends Application {
         return t;
     }
 
-    // ================= ВКЛАДКА: СЧЕТА =================
     private VBox createAccountsTab() {
         VBox root = new VBox(10);
         root.setPadding(new Insets(20));
@@ -332,11 +334,7 @@ public class FinanceApp extends Application {
         accountsListView = new ListView<>();
         accountsListView.setPrefHeight(300);
 
-        Button refreshBtn = new Button("Обновить");
-        refreshBtn.setOnAction(e -> refreshAccounts());
-
-        root.getChildren().addAll(title, inputBox, balanceLabel, accountsListView, refreshBtn);
-        refreshAccounts();
+        root.getChildren().addAll(title, inputBox, balanceLabel, accountsListView);
         return root;
     }
 
@@ -360,11 +358,10 @@ public class FinanceApp extends Application {
             }
             accountsListView.setItems(list);
         } catch (SQLException e) {
-            showAlert("Ошибка", e.getMessage(), Alert.AlertType.ERROR);
+            if (balanceLabel != null) balanceLabel.setText("Ошибка загрузки");
         }
     }
 
-    // ================= ВКЛАДКА: ТРАНЗАКЦИИ =================
     private VBox createTransactionsTab() {
         VBox root = new VBox(10);
         root.setPadding(new Insets(20));
@@ -406,10 +403,9 @@ public class FinanceApp extends Application {
         addTransBtn.setOnAction(e -> addTransaction());
         grid.add(addTransBtn, 1, 5);
 
-        Button loadBtn = new Button("Загрузить справочники");
-        loadBtn.setOnAction(e -> loadDropdowns());
+        // Кнопка "Загрузить справочники" УДАЛЕНА - теперь загрузка автоматическая
 
-        root.getChildren().addAll(title, grid, loadBtn);
+        root.getChildren().addAll(title, grid);
         return root;
     }
 
@@ -425,17 +421,13 @@ public class FinanceApp extends Application {
             accountComboBox.setItems(accList);
 
             ObservableList<String> catList = FXCollections.observableArrayList();
-            ps = connection.prepareStatement("SELECT id, name, type FROM categories WHERE user_id = ?");
-            ps.setInt(1, currentUserId);
+            ps = connection.prepareStatement("SELECT id, name, type FROM categories");
             rs = ps.executeQuery();
             while (rs.next()) {
                 String type = rs.getString("type").equals("income") ? "(Доход)" : "(Расход)";
                 catList.add(rs.getInt("id") + " - " + rs.getString("name") + " " + type);
             }
             categoryComboBox.setItems(catList);
-
-            showAlert("Успех", "Загружено счетов: " + accList.size() + 
-                     "\nЗагружено категорий: " + catList.size(), Alert.AlertType.INFORMATION);
         } catch (SQLException e) {
             showAlert("Ошибка", e.getMessage(), Alert.AlertType.ERROR);
         }
@@ -451,46 +443,122 @@ public class FinanceApp extends Application {
             int accId = Integer.parseInt(accountComboBox.getValue().split(" - ")[0]);
             int catId = Integer.parseInt(categoryComboBox.getValue().split(" - ")[0]);
             double amount = Double.parseDouble(amountField.getText());
+            
+            if (amount <= 0) {
+                showAlert("Ошибка ввода", "Сумма должна быть больше нуля", Alert.AlertType.WARNING);
+                return;
+            }
 
+            // Определяем тип категории
             PreparedStatement psType = connection.prepareStatement("SELECT type FROM categories WHERE id = ?");
             psType.setInt(1, catId);
             ResultSet rsType = psType.executeQuery();
-            rsType.next();
+            if (!rsType.next()) {
+                showAlert("Ошибка", "Категория не найдена", Alert.AlertType.ERROR);
+                return;
+            }
             String type = rsType.getString("type");
 
-            String sqlInsert = "INSERT INTO transactions (user_id, account_id, category_id, amount, transaction_date, description) VALUES (?, ?, ?, ?, ?, ?)";
-            PreparedStatement psIns = connection.prepareStatement(sqlInsert);
-            psIns.setInt(1, currentUserId);
-            psIns.setInt(2, accId);
-            psIns.setInt(3, catId);
-            psIns.setDouble(4, amount);
-            psIns.setDate(5, Date.valueOf(datePicker.getValue()));
-            psIns.setString(6, descriptionField.getText());
-            psIns.executeUpdate();
+            // Проверяем баланс ДО начала транзакции
+            if (type.equals("expense")) {
+                PreparedStatement psCheck = connection.prepareStatement(
+                    "SELECT balance FROM accounts WHERE id = ? AND user_id = ?");
+                psCheck.setInt(1, accId);
+                psCheck.setInt(2, currentUserId);
+                ResultSet rsCheck = psCheck.executeQuery();
+                
+                if (rsCheck.next()) {
+                    double currentBalance = rsCheck.getDouble("balance");
+                    if (currentBalance < amount) {
+                        showAlert("Недостаточно средств", 
+                            String.format("На счете недостаточно средств.\n" +
+                                        "Текущий баланс: %.2f ₽\n" +
+                                        "Требуется: %.2f ₽\n" +
+                                        "Не хватает: %.2f ₽", 
+                                        currentBalance, amount, amount - currentBalance), 
+                            Alert.AlertType.ERROR);
+                        return;
+                    }
+                }
+            }
 
-            String sqlUpdate = type.equals("income")
-                ? "UPDATE accounts SET balance = balance + ? WHERE id = ?"
-                : "UPDATE accounts SET balance = balance - ? WHERE id = ?";
+            // 🔥 ОБЕРТЫВАЕМ ВСЕ ОПЕРАЦИИ В ТРАНЗАКЦИЮ
+            connection.setAutoCommit(false);
             
-            PreparedStatement psUpd = connection.prepareStatement(sqlUpdate);
-            psUpd.setDouble(1, amount);
-            psUpd.setInt(2, accId);
-            psUpd.executeUpdate();
+            try {
+                // 1. Вставляем транзакцию
+                String sqlInsert = "INSERT INTO transactions (account_id, category_id, amount, transaction_date, description) VALUES (?, ?, ?, ?, ?)";
+                PreparedStatement psIns = connection.prepareStatement(sqlInsert);
+                psIns.setInt(1, accId);
+                psIns.setInt(2, catId);
+                psIns.setDouble(3, amount);
+                psIns.setDate(4, Date.valueOf(datePicker.getValue()));
+                psIns.setString(5, descriptionField.getText());
+                psIns.executeUpdate();
 
-            showAlert("Успех", "Транзакция добавлена", Alert.AlertType.INFORMATION);
-            amountField.clear();
-            descriptionField.clear();
+                // 2. Обновляем баланс
+                String sqlUpdate = type.equals("income")
+                    ? "UPDATE accounts SET balance = balance + ? WHERE id = ?"
+                    : "UPDATE accounts SET balance = balance - ? WHERE id = ?";
+                
+                PreparedStatement psUpd = connection.prepareStatement(sqlUpdate);
+                psUpd.setDouble(1, amount);
+                psUpd.setInt(2, accId);
+                int rowsUpdated = psUpd.executeUpdate();
+                
+                if (rowsUpdated == 0) {
+                    throw new SQLException("Не удалось обновить баланс счета");
+                }
+
+                // ✅ Если всё успешно - коммитим
+                connection.commit();
+                
+                showAlert("Успех", "Транзакция добавлена", Alert.AlertType.INFORMATION);
+                amountField.clear();
+                descriptionField.clear();
+                loadDropdowns();
+                
+            } catch (SQLException e) {
+                // ❌ Если ошибка - откатываем ВСЁ
+                connection.rollback();
+                
+                // Понятное сообщение об ошибке
+                if (e.getMessage().contains("chk_balance_non_negative")) {
+                    showAlert("Ошибка операции", 
+                        "Не удалось выполнить операцию: недостаточно средств на счете.\n" +
+                        "Проверьте баланс и попробуйте снова.", 
+                        Alert.AlertType.ERROR);
+                } else if (e.getMessage().contains("FOREIGN KEY")) {
+                    showAlert("Ошибка данных", 
+                        "Выбранный счет или категория больше не существуют.\n" +
+                        "Обновите списки и попробуйте снова.", 
+                        Alert.AlertType.ERROR);
+                } else {
+                    showAlert("Ошибка базы данных", 
+                        "Произошла ошибка при сохранении транзакции:\n" + e.getMessage(), 
+                        Alert.AlertType.ERROR);
+                }
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+            
+        } catch (NumberFormatException e) {
+            showAlert("Ошибка ввода", "Некорректная сумма. Введите числовое значение.", Alert.AlertType.ERROR);
+        } catch (SQLException e) {
+            // Уже обработано выше, просто логируем
+            e.printStackTrace();
         } catch (Exception e) {
-            showAlert("Ошибка", e.getMessage(), Alert.AlertType.ERROR);
+            showAlert("Неожиданная ошибка", e.getMessage(), Alert.AlertType.ERROR);
+            e.printStackTrace();
         }
     }
-
-    // ================= ВКЛАДКА: ЦЕЛИ =================
+    
+    
     private VBox createGoalsTab() {
         VBox root = new VBox(15);
         root.setPadding(new Insets(20));
 
-        // Секция 1: Создание новой цели
         Label createTitle = new Label("1. Создание новой цели");
         createTitle.setFont(Font.font("Arial", 16));
         
@@ -522,7 +590,6 @@ public class FinanceApp extends Application {
         createGrid.add(new Label("Сумма:"), 0, 1); createGrid.add(newGoalAmount, 1, 1);
         createGrid.add(createBtn, 1, 2);
 
-        // Секция 2: Пополнение цели со счёта
         Separator separator = new Separator();
         Label refillTitle = new Label("2. Пополнение цели со счёта");
         refillTitle.setFont(Font.font("Arial", 16));
@@ -543,21 +610,14 @@ public class FinanceApp extends Application {
         refillBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
         refillBtn.setOnAction(e -> replenishGoal());
 
-        Button loadRefsBtn = new Button("Обновить списки");
-        loadRefsBtn.setOnAction(e -> loadGoalDropdowns());
-
-        actionBox.getChildren().addAll(refillBtn, loadRefsBtn);
+        actionBox.getChildren().addAll(refillBtn);
         refillContainer.getChildren().addAll(accountForGoalBox, goalSelectionBox, amountToGoalField, actionBox);
 
-        // Секция 3: Отображение статуса целей
         goalsArea = new TextArea();
         goalsArea.setPrefHeight(250);
         goalsArea.setEditable(false);
 
         root.getChildren().addAll(createTitle, createGrid, separator, refillTitle, refillContainer, goalsArea);
-        
-        refreshGoals();
-        loadGoalDropdowns();
         
         return root;
     }
@@ -594,14 +654,12 @@ public class FinanceApp extends Application {
 
     private void replenishGoal() {
         try {
-            // Проверка заполнения полей
             if (accountForGoalBox.getValue() == null || goalSelectionBox.getValue() == null || 
                 amountToGoalField.getText().trim().isEmpty()) {
                 showAlert("Ошибка ввода", "Пожалуйста, выберите счёт, цель и введите сумму.", Alert.AlertType.WARNING);
                 return;
             }
 
-            // Парсинг ID и суммы
             int accountId = Integer.parseInt(accountForGoalBox.getValue().split(" - ")[0]);
             int goalId = Integer.parseInt(goalSelectionBox.getValue().split(" - ")[0]);
             double amount;
@@ -618,7 +676,7 @@ public class FinanceApp extends Application {
                 return;
             }
 
-            // Получение текущего баланса счёта
+            // Проверяем баланс
             String checkBalanceSql = "SELECT balance FROM accounts WHERE id = ? AND user_id = ?";
             PreparedStatement psCheckBalance = connection.prepareStatement(checkBalanceSql);
             psCheckBalance.setInt(1, accountId);
@@ -632,13 +690,17 @@ public class FinanceApp extends Application {
 
             double currentBalance = rsBalance.getDouble("balance");
             if (currentBalance < amount) {
-                showAlert("Недостаточно средств!", 
-                    String.format("На счёте %.2f ₽, а вы пытаетесь перевести %.2f ₽.", currentBalance, amount), 
+                showAlert("Недостаточно средств", 
+                    String.format("На счёте недостаточно средств.\n" +
+                                "Текущий баланс: %.2f ₽\n" +
+                                "Требуется: %.2f ₽\n" +
+                                "Не хватает: %.2f ₽", 
+                                currentBalance, amount, amount - currentBalance), 
                     Alert.AlertType.ERROR);
                 return;
             }
 
-            // ПРОВЕРКА: не превысит ли сумма целевое значение
+            // Проверяем цель
             String checkGoalSql = "SELECT target_amount, current_amount FROM savings_goals WHERE id = ? AND user_id = ?";
             PreparedStatement psCheckGoal = connection.prepareStatement(checkGoalSql);
             psCheckGoal.setInt(1, goalId);
@@ -655,25 +717,24 @@ public class FinanceApp extends Application {
             double remainingAmount = targetAmount - currentAmount;
 
             if (amount > remainingAmount) {
-                showAlert("Превышение цели!", 
-                    String.format("До цели осталось %.2f ₽.\nВы пытаетесь перевести %.2f ₽.\n" +
+                showAlert("Превышение цели", 
+                    String.format("До цели осталось %.2f ₽.\n" +
+                                 "Вы пытаетесь перевести %.2f ₽.\n" +
                                  "Введите сумму не больше %.2f ₽", 
                                  remainingAmount, amount, remainingAmount), 
                     Alert.AlertType.ERROR);
                 return;
             }
 
-            // Выполнение перевода
+            // 🔥 ТРАНЗАКЦИЯ для пополнения цели
             connection.setAutoCommit(false);
             try {
-                // Списываем со счёта
                 String deductSql = "UPDATE accounts SET balance = balance - ? WHERE id = ?";
                 PreparedStatement psDeduct = connection.prepareStatement(deductSql);
                 psDeduct.setDouble(1, amount);
                 psDeduct.setInt(2, accountId);
                 psDeduct.executeUpdate();
 
-                // Начисляем на цель
                 String addGoalSql = "UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?";
                 PreparedStatement psAdd = connection.prepareStatement(addGoalSql);
                 psAdd.setDouble(1, amount);
@@ -689,16 +750,24 @@ public class FinanceApp extends Application {
                 refreshGoals();
                 loadGoalDropdowns();
                 
-            } catch (SQLException ex) {
+            } catch (SQLException e) {
                 connection.rollback();
-                throw ex;
+                if (e.getMessage().contains("chk_balance_non_negative")) {
+                    showAlert("Ошибка операции", 
+                        "Недостаточно средств на счете для выполнения операции.", 
+                        Alert.AlertType.ERROR);
+                } else {
+                    showAlert("Ошибка базы данных", e.getMessage(), Alert.AlertType.ERROR);
+                }
+                throw e;
             } finally {
                 connection.setAutoCommit(true);
             }
 
         } catch (Exception e) {
-            showAlert("Ошибка операции", e.getMessage(), Alert.AlertType.ERROR);
-            e.printStackTrace();
+            if (!e.getMessage().contains("chk_balance_non_negative")) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -712,7 +781,7 @@ public class FinanceApp extends Application {
             while (rs.next()) {
                 double percent = (rs.getDouble("current_amount") / rs.getDouble("target_amount")) * 100;
                 double remaining = rs.getDouble("target_amount") - rs.getDouble("current_amount");
-                sb.append(String.format("🎯 %s\n", rs.getString("name")));
+                sb.append(String.format(" %s\n", rs.getString("name")));
                 sb.append(String.format("   Цель: %.2f ₽\n", rs.getDouble("target_amount")));
                 sb.append(String.format("   Накоплено: %.2f ₽ (%.1f%%)\n", 
                     rs.getDouble("current_amount"), percent));
@@ -724,7 +793,6 @@ public class FinanceApp extends Application {
         }
     }
 
-    // ================= ВКЛАДКА: АНАЛИТИКА =================
     private VBox createStatsTab() {
         VBox root = new VBox(10);
         root.setPadding(new Insets(20));
@@ -737,13 +805,7 @@ public class FinanceApp extends Application {
         statsArea.setEditable(false);
         statsArea.setFont(new javafx.scene.text.Font("Consolas", 12));
 
-        Button btn = new Button("Обновить статистику");
-        btn.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-size: 14;");
-        btn.setPrefWidth(200);
-        btn.setOnAction(e -> loadStats());
-
-        root.getChildren().addAll(title, statsArea, btn);
-        loadStats();
+        root.getChildren().addAll(title, statsArea);
         return root;
     }
 
@@ -751,20 +813,51 @@ public class FinanceApp extends Application {
         try {
             StringBuilder sb = new StringBuilder("=== ФИНАНСОВАЯ АНАЛИТИКА ===\n\n");
 
+            // 1. ВСЕГО ДОХОДОВ
             String incomeSql = "SELECT SUM(t.amount) FROM transactions t " +
+                             "JOIN accounts a ON t.account_id = a.id " +
                              "JOIN categories c ON t.category_id = c.id " +
-                             "WHERE t.user_id = ? AND c.type = 'income'";
+                             "WHERE a.user_id = ? AND c.type = 'income'";
             PreparedStatement ps = connection.prepareStatement(incomeSql);
             ps.setInt(1, currentUserId);
             ResultSet rs = ps.executeQuery();
             if (rs.next()) {
-                sb.append(String.format("📈 ВСЕГО ДОХОДОВ: %.2f ₽\n\n", rs.getDouble(1)));
+                Double income = rs.getObject(1) != null ? rs.getDouble(1) : 0.0;
+                sb.append(String.format("📈 ВСЕГО ДОХОДОВ: %.2f ₽\n\n", income));
             }
 
+            // 2. ДОХОДЫ ПО КАТЕГОРИЯМ
+            String incomeByCategorySql = "SELECT c.name, SUM(t.amount) as total " +
+                                       "FROM transactions t " +
+                                       "JOIN accounts a ON t.account_id = a.id " +
+                                       "JOIN categories c ON t.category_id = c.id " +
+                                       "WHERE a.user_id = ? AND c.type = 'income' " +
+                                       "GROUP BY c.name ORDER BY total DESC";
+            ps = connection.prepareStatement(incomeByCategorySql);
+            ps.setInt(1, currentUserId);
+            rs = ps.executeQuery();
+            
+            sb.append("📊 ДОХОДЫ ПО КАТЕГОРИЯМ:\n");
+            double totalIncome = 0;
+            boolean hasIncome = false;
+            while (rs.next()) {
+                hasIncome = true;
+                double amount = rs.getDouble("total");
+                sb.append(String.format("   • %s: %.2f ₽\n", rs.getString("name"), amount));
+                totalIncome += amount;
+            }
+            if (hasIncome) {
+                sb.append(String.format("\n   Итого доходов: %.2f ₽\n\n", totalIncome));
+            } else {
+                sb.append("   Нет доходов\n\n");
+            }
+
+            // 3. РАСХОДЫ ПО КАТЕГОРИЯМ
             String expSql = "SELECT c.name, SUM(t.amount) as total " +
                           "FROM transactions t " +
+                          "JOIN accounts a ON t.account_id = a.id " +
                           "JOIN categories c ON t.category_id = c.id " +
-                          "WHERE t.user_id = ? AND c.type = 'expense' " +
+                          "WHERE a.user_id = ? AND c.type = 'expense' " +
                           "GROUP BY c.name ORDER BY total DESC";
             ps = connection.prepareStatement(expSql);
             ps.setInt(1, currentUserId);
@@ -772,25 +865,51 @@ public class FinanceApp extends Application {
             
             sb.append("📊 РАСХОДЫ ПО КАТЕГОРИЯМ:\n");
             double totalExpenses = 0;
+            boolean hasExpenses = false;
             while (rs.next()) {
+                hasExpenses = true;
                 double amount = rs.getDouble("total");
                 sb.append(String.format("   • %s: %.2f ₽\n", rs.getString("name"), amount));
                 totalExpenses += amount;
             }
-            sb.append(String.format("\n   Итого расходов: %.2f ₽\n\n", totalExpenses));
+            if (hasExpenses) {
+                sb.append(String.format("\n   Итого расходов: %.2f ₽\n\n", totalExpenses));
+            } else {
+                sb.append("   Нет расходов\n\n");
+            }
 
-            sb.append("🕐 ПОСЛЕДНИЕ ОПЕРАЦИИ:\n");
+            // 4. 🔥 ВСЕ ОПЕРАЦИИ (с комментариями)
+            sb.append("📋 ВСЕ ОПЕРАЦИИ:\n");
             
-            String recentSql = getLastTransactionsQuery();
-            
-            ps = connection.prepareStatement(recentSql);
+            String allOpsSql = getAllTransactionsQuery();
+            ps = connection.prepareStatement(allOpsSql);
             ps.setInt(1, currentUserId);
             rs = ps.executeQuery();
+            
+            boolean hasOps = false;
             while (rs.next()) {
-                sb.append(String.format("   %s | %s | %.2f ₽\n",
-                    rs.getDate("transaction_date"),
-                    rs.getString("category"),
-                    rs.getDouble("amount")));
+                hasOps = true;
+                String typeLabel = rs.getString("type").equals("income") ? "Доход" : "Расход";
+                String description = rs.getString("description");
+                
+                // Форматируем вывод с комментарием (если есть)
+                if (description != null && !description.trim().isEmpty()) {
+                    sb.append(String.format("   %s | %s | %.2f ₽ | [%s]\n   └─ 💬 %s\n",
+                        rs.getDate("transaction_date"),
+                        rs.getString("category"),
+                        rs.getDouble("amount"),
+                        typeLabel,
+                        description));
+                } else {
+                    sb.append(String.format("   %s | %s | %.2f ₽ | [%s]\n",
+                        rs.getDate("transaction_date"),
+                        rs.getString("category"),
+                        rs.getDouble("amount"),
+                        typeLabel));
+                }
+            }
+            if (!hasOps) {
+                sb.append("   Нет операций\n");
             }
 
             statsArea.setText(sb.toString());
@@ -800,18 +919,42 @@ public class FinanceApp extends Application {
         }
     }
 
+    private String getAllTransactionsQuery() {
+        // Добавлено поле t.description
+        if (activeDbType.equals("MSSQL")) {
+            return "SELECT t.amount, t.transaction_date, c.name as category, c.type, t.description " +
+                   "FROM transactions t " +
+                   "JOIN accounts a ON t.account_id = a.id " +
+                   "JOIN categories c ON t.category_id = c.id " +
+                   "WHERE a.user_id = ? " +
+                   "ORDER BY t.transaction_date DESC";
+        } else {
+            return "SELECT t.amount, t.transaction_date, c.name as category, c.type, t.description " +
+                   "FROM transactions t " +
+                   "JOIN accounts a ON t.account_id = a.id " +
+                   "JOIN categories c ON t.category_id = c.id " +
+                   "WHERE a.user_id = ? " +
+                   "ORDER BY t.transaction_date DESC";
+        }
+    }
+
+
+
+
     private String getLastTransactionsQuery() {
         if (activeDbType.equals("MSSQL")) {
             return "SELECT TOP 5 t.amount, t.transaction_date, t.description, c.name as category " +
                    "FROM transactions t " +
+                   "JOIN accounts a ON t.account_id = a.id " +
                    "JOIN categories c ON t.category_id = c.id " +
-                   "WHERE t.user_id = ? " +
+                   "WHERE a.user_id = ? " +
                    "ORDER BY t.transaction_date DESC";
         } else {
             return "SELECT t.amount, t.transaction_date, t.description, c.name as category " +
                    "FROM transactions t " +
+                   "JOIN accounts a ON t.account_id = a.id " +
                    "JOIN categories c ON t.category_id = c.id " +
-                   "WHERE t.user_id = ? " +
+                   "WHERE a.user_id = ? " +
                    "ORDER BY t.transaction_date DESC LIMIT 5";
         }
     }
