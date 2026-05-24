@@ -1,12 +1,16 @@
 -- ============================================
--- Скрипт создания таблиц базы данных
+-- Создание таблиц для PostgreSQL
 -- Система учета личных финансов
 -- ============================================
 
+-- Удаляем таблицы
+DROP TABLE IF EXISTS savings_goals CASCADE;
+DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS categories CASCADE;
+DROP TABLE IF EXISTS accounts CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
--- ============================================
--- Таблица 1: users (Пользователи)
--- ============================================
+-- Таблица пользователей
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -14,9 +18,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================
--- Таблица 2: accounts (Счета)
--- ============================================
+-- Таблица счетов
 CREATE TABLE accounts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -30,52 +32,34 @@ CREATE TABLE accounts (
         CHECK (balance >= 0)
 );
 
--- ============================================
--- Таблица 3: categories (Категории)
--- ============================================
+-- Таблица категорий (ОБЩАЯ для всех)
 CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(10) NOT NULL,
-    CONSTRAINT fk_categories_user 
-        FOREIGN KEY (user_id) 
-        REFERENCES users(id) 
-        ON DELETE CASCADE,
     CONSTRAINT chk_category_type 
         CHECK (type IN ('income', 'expense'))
 );
 
--- ============================================
--- Таблица 4: transactions (Транзакции)
--- ============================================
+-- Таблица транзакций (БЕЗ user_id)
 CREATE TABLE transactions (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL,
     account_id INTEGER NOT NULL,
     category_id INTEGER NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     transaction_date DATE NOT NULL,
     description VARCHAR(255),
-    CONSTRAINT fk_transactions_user 
-        FOREIGN KEY (user_id) 
-        REFERENCES users(id) 
-        ON DELETE CASCADE,
     CONSTRAINT fk_transactions_account 
         FOREIGN KEY (account_id) 
-        REFERENCES accounts(id) 
-        ON DELETE CASCADE,
+        REFERENCES accounts(id),
     CONSTRAINT fk_transactions_category 
         FOREIGN KEY (category_id) 
-        REFERENCES categories(id) 
-        ON DELETE CASCADE,
+        REFERENCES categories(id),
     CONSTRAINT chk_amount_positive 
         CHECK (amount > 0)
 );
 
--- ============================================
--- Таблица 5: savings_goals (Цели накоплений)
--- ============================================
+-- Таблица целей
 CREATE TABLE savings_goals (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -93,16 +77,10 @@ CREATE TABLE savings_goals (
         CHECK (target_amount > 0)
 );
 
--- ============================================
--- Создаем индексы для ускорения поиска
--- ============================================
+-- Индексы
 CREATE INDEX idx_accounts_user_id ON accounts(user_id);
-CREATE INDEX idx_categories_user_id ON categories(user_id);
-CREATE INDEX idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX idx_transactions_account_id ON transactions(account_id);
 CREATE INDEX idx_transactions_category_id ON transactions(category_id);
-CREATE INDEX idx_transactions_date ON transactions(transaction_date);
 CREATE INDEX idx_savings_goals_user_id ON savings_goals(user_id);
 
--- Вывод сообщения об успешном создании
-SELECT 'База данных успешно создана!' AS result;
+SELECT 'Таблицы успешно созданы!' AS result;
