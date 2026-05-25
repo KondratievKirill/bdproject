@@ -56,7 +56,9 @@ CREATE TABLE transactions (
         FOREIGN KEY (category_id) 
         REFERENCES categories(id),
     CONSTRAINT chk_amount_positive 
-        CHECK (amount > 0)
+        CHECK (amount > 0),
+    CONSTRAINT chk_transaction_date_not_future
+        CHECK (transaction_date <= CURRENT_DATE)
 );
 
 -- Таблица целей
