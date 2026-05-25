@@ -448,6 +448,21 @@ public class FinanceApp extends Application {
                 showAlert("Ошибка ввода", "Сумма должна быть больше нуля", Alert.AlertType.WARNING);
                 return;
             }
+            
+            // 🔥 ПРОВЕРКА: дата не должна быть в будущем
+            LocalDate transactionDate = datePicker.getValue();
+            LocalDate currentDate = LocalDate.now();
+            
+            if (transactionDate.isAfter(currentDate)) {
+                showAlert("Ошибка ввода даты", 
+                    String.format("Нельзя создать транзакцию с будущей датой.\n" +
+                                "Выбранная дата: %s\n" +
+                                "Текущая дата: %s\n" +
+                                "Выберите дату сегодня или в прошлом.", 
+                                transactionDate, currentDate), 
+                    Alert.AlertType.ERROR);
+                return;
+            }
 
             // Определяем тип категории
             PreparedStatement psType = connection.prepareStatement("SELECT type FROM categories WHERE id = ?");
@@ -492,7 +507,7 @@ public class FinanceApp extends Application {
                 psIns.setInt(1, accId);
                 psIns.setInt(2, catId);
                 psIns.setDouble(3, amount);
-                psIns.setDate(4, Date.valueOf(datePicker.getValue()));
+                psIns.setDate(4, Date.valueOf(transactionDate)); // Используем проверенную дату
                 psIns.setString(5, descriptionField.getText());
                 psIns.executeUpdate();
 
@@ -527,6 +542,11 @@ public class FinanceApp extends Application {
                     showAlert("Ошибка операции", 
                         "Не удалось выполнить операцию: недостаточно средств на счете.\n" +
                         "Проверьте баланс и попробуйте снова.", 
+                        Alert.AlertType.ERROR);
+                } else if (e.getMessage().contains("chk_transaction_date_not_future")) {
+                    showAlert("Ошибка даты", 
+                        "Транзакция не может быть создана с будущей датой.\n" +
+                        "Выберите сегодняшнюю или прошедшую дату.", 
                         Alert.AlertType.ERROR);
                 } else if (e.getMessage().contains("FOREIGN KEY")) {
                     showAlert("Ошибка данных", 
